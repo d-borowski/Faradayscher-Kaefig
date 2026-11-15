@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Faraday'scher Käfig: Abschirmung</title>
+<style>
+  :root { color-scheme: light; --ink:#111; --bg:#fff; --muted:#555; --line:#cfcfcf; --accent:#1a4fa0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  main { max-width:920px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 12px; }
+  .controls { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:12px; }
+  button { font:inherit; padding:8px 14px; border:2px solid var(--ink); background:#fff; color:var(--ink);
+           border-radius:8px; cursor:pointer; }
+  button:hover { background:#f1f1f1; }
+  button:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  button.primary { background:var(--ink); color:#fff; }
+  button.primary:hover { background:#333; }
+  button:disabled { opacity:.45; cursor:default; }
+  .stage { border:2px solid var(--ink); border-radius:10px; background:#fff; overflow:hidden;
+           width:min(100%, max(380px, calc((100vh - 360px) * 700 / 615))); margin:0 auto; }
+  svg { display:block; width:100%; height:auto; user-select:none; -webkit-user-select:none; }
+  svg text { font-family:inherit; }
+  .divider { border-top:1px solid var(--line); }
+  .info { margin-top:12px; padding:12px 14px; border:1px solid var(--line); border-radius:8px; }
+  .info p { margin:0 0 8px; }
+  .info p:last-child { margin:0; }
+  #state { font-weight:600; min-height:3em; }
+  .note { color:var(--muted); font-size:.92rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Der Faraday'sche Käfig: Abschirmung eines äußeren Feldes</h1>
+  <p class="sub">Überlege zuerst: Was passiert im Inneren des Käfigs, wenn ein äußeres elektrisches Feld eingeschaltet wird? Schalte dann das Feld ein und prüfe deine Vermutung.</p>
+
+  <div class="controls">
+    <button id="toggle" type="button" class="primary">Feld einschalten</button>
+    <button id="pause" type="button">Pause</button>
+    <button id="reset" type="button">Zurücksetzen</button>
+  </div>
+
+  <div class="stage">
+    <svg id="scene" viewBox="0 0 700 455" role="img"
+         aria-label="Animation: Ein Metallkäfig in einem äußeren elektrischen Feld. Die Ladungen im Metall verschieben sich und erzeugen ein Gegenfeld, bis das Innere feldfrei ist.">
+      <defs>
+        <marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto">
+          <path d="M0,0 L12,5 L0,10 z" fill="#000"/>
+        </marker>
+      </defs>
+      <rect width="700" height="455" fill="#fff"/>
+      <g transform="translate(350 212.5) scale(1.3) translate(-350 -212.5)">
+      <rect x="220" y="85" width="260" height="255" fill="#d9d9d9" stroke="#000" stroke-width="1.5"/>
+      <rect x="248" y="113" width="204" height="199" fill="#fff" stroke="#000" stroke-width="1.5"/>
+      <g id="outer"></g>
+      <g id="counter"></g>
+      <g id="charges"></g>
+      <text x="350" y="358" text-anchor="middle" font-size="16" fill="#000">Metallkäfig</text>
+      </g>
+      <!-- Legende -->
+      <line x1="120" y1="437" x2="185" y2="437" stroke="#000" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text x="195" y="443" font-size="17">äußeres Feld</text>
+      <line x1="420" y1="437" x2="355" y2="437" stroke="#000" stroke-width="2.2" stroke-dasharray="7,5" marker-end="url(#arrow)"/>
+      <text x="430" y="443" font-size="17">Gegenfeld</text>
+    </svg>
+    <div class="divider">
+      <svg id="panel" viewBox="0 0 700 160" role="img"
+           aria-label="Vektoraddition: äußeres Feld plus Gegenfeld ergibt das Feld im Inneren.">
+        <rect width="700" height="160" fill="#fff"/>
+        <text x="20" y="24" font-size="17" font-weight="600">Feld im Inneren des Käfigs: äußeres Feld + Gegenfeld</text>
+        <text x="20" y="66" font-size="16">äußeres Feld</text>
+        <text x="20" y="106" font-size="16">Gegenfeld</text>
+        <text x="20" y="146" font-size="16" font-weight="600">Summe</text>
+        <line x1="150" y1="49" x2="150" y2="156" stroke="#bbb" stroke-width="1" stroke-dasharray="3,4"/>
+        <g id="panelArrows"></g>
+        <text id="zero" x="360" y="146" font-size="16" font-weight="600" visibility="hidden">= 0: das Innere ist feldfrei</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="info" aria-live="polite">
+    <p id="state"></p>
+    <p class="note">Hinweis: In Wirklichkeit dauert dieser Vorgang nur Bruchteile einer Sekunde. Hier ist er stark verlangsamt. Es sind nur wenige Ladungen gezeichnet; in Wirklichkeit sind es sehr viele.</p>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+  var TAU = 2.2;            // Zeitkonstante der Ladungsverschiebung (s), stark verlangsamt
+  var N = 10;               // Ladungen je Vorzeichen
+
+  /* ---------- Feldpfeile ---------- */
+  var outerG = document.getElementById('outer');
+  var outerArrows = [];
+  for (var y = 75; y <= 325; y += 50) {
+    outerArrows.push(el('line', { x1: 90, y1: y, x2: 610, y2: y, stroke: '#000', 'stroke-width': 1.5, 'marker-end': 'url(#arrow)' }, outerG));
+  }
+  var counterG = document.getElementById('counter');
+  var counterArrows = [150, 200, 250, 300].map(function (y) {
+    return el('line', { x1: 448, y1: y, x2: 256, y2: y, stroke: '#000', 'stroke-width': 2.2, 'stroke-dasharray': '7,5',
+                        'marker-end': 'url(#arrow)', visibility: 'hidden' }, counterG);
+  });
+
+  /* ---------- Ladungen entlang des Käfigrahmens ---------- */
+  // Rechteckige Bahn (Mittellinie der Rahmenwand), parametrisiert über die Bogenlänge im Uhrzeigersinn
+  // ab der linken oberen Ecke.
+  function Loop(x0, y0, x1, y1) {
+    this.x0 = x0; this.y0 = y0; this.w = x1 - x0; this.h = y1 - y0;
+    this.P = 2 * (this.w + this.h);
+  }
+  Loop.prototype.at = function (u) {
+    u = ((u % this.P) + this.P) % this.P;
+    var w = this.w, h = this.h;
+    if (u < w) return [this.x0 + u, this.y0];
+    u -= w; if (u < h) return [this.x0 + w, this.y0 + u];
+    u -= h; if (u < w) return [this.x0 + w - u, this.y0 + h];
+    u -= w; return [this.x0, this.y0 + h - u];
+  };
+  var plusLoop = new Loop(229, 94, 471, 331);     // etwas außen
+  var minusLoop = new Loop(239, 104, 461, 321);   // etwas innen
+
+  function shortest(d, P) { d = ((d % P) + P) % P; return d > P / 2 ? d - P : d; }
+
+  var chargesG = document.getElementById('charges');
+  var glyphs = [];
+  for (var i = 0; i < N; i++) {
+    // Pluszeichen: wandern zur rechten Wand
+    var u0p = (i + 0.5) / N * plusLoop.P;
+    var utp = plusLoop.w + (i + 0.5) * plusLoop.h / N;                    // rechte Wand, oben nach unten
+    glyphs.push({ sign: '+', loop: plusLoop, u0: u0p, d: shortest(utp - u0p, plusLoop.P),
+                  el: el('path', { fill: 'none', stroke: '#000', 'stroke-width': 2.4 }, chargesG) });
+    // Minuszeichen: wandern zur linken Wand
+    var u0m = (i + 0.5) / N * minusLoop.P;
+    var k = N - 1 - i;
+    var utm = 2 * minusLoop.w + minusLoop.h + (k + 0.5) * minusLoop.h / N; // linke Wand, unten nach oben
+    glyphs.push({ sign: '-', loop: minusLoop, u0: u0m, d: shortest(utm - u0m, minusLoop.P),
+                  el: el('path', { fill: 'none', stroke: '#000', 'stroke-width': 2.4 }, chargesG) });
+  }
+
+  /* ---------- Vektoraddition (unteres Feld) ---------- */
+  var panelG = document.getElementById('panelArrows');
+  var X0 = 330, LEN = 190;
+  function pArrow(y, dashed) {
+    var a = { stroke: '#000', 'stroke-width': dashed ? 2.4 : 2.6, 'marker-end': 'url(#arrow)', visibility: 'hidden' };
+    if (dashed) a['stroke-dasharray'] = '7,5';
+    return el('line', a, panelG);
+  }
+  var pOuter = pArrow(62, false), pCounter = pArrow(102, true), pSum = pArrow(142, false);
+  var zeroText = document.getElementById('zero');
+  function setArrow(line, y, x0, x1) {
+    if (Math.abs(x1 - x0) < 8) { line.setAttribute('visibility', 'hidden'); return; }
+    line.setAttribute('x1', x0); line.setAttribute('x2', x1); line.setAttribute('y1', y); line.setAttribute('y2', y);
+    line.setAttribute('visibility', 'visible');
+  }
+
+  /* ---------- Zustand ---------- */
+  var on = false, paused = false;
+  var f = 0;   // Stärke des äußeren Feldes (0 aus, 1 an), weich eingeblendet
+  var s = 0;   // Grad der Ladungsverschiebung (0 gleichmäßig, 1 voll verschoben)
+  var lastState = '';
+
+  var STATES = {
+    off0: 'Der Käfig steht ohne äußeres Feld. Die Ladungen im Metall sind gleichmäßig verteilt: gleich viele positive und negative, der Käfig ist neutral.',
+    start: 'Das äußere Feld ist eingeschaltet. Es übt eine Kraft auf die frei beweglichen Ladungen im Metall aus.',
+    move: 'Die positiven Ladungen werden in Feldrichtung verschoben, die negativen entgegen. Dadurch entsteht im Inneren ein Gegenfeld. Die Summe der beiden Felder (unten) wird kleiner.',
+    done: 'Das Gegenfeld ist jetzt so stark wie das äußere Feld. Die Summe ist null: Im Inneren wirkt kein Feld mehr, die Ladungen kommen zur Ruhe.',
+    back: 'Das äußere Feld ist ausgeschaltet. Die Ladungen verteilen sich wieder gleichmäßig, das Gegenfeld verschwindet.'
+  };
+
+  function glyphPath(x, y, sign) {
+    var d = 'M' + (x - 5).toFixed(1) + ' ' + y.toFixed(1) + 'H' + (x + 5).toFixed(1);
+    if (sign === '+') d += 'M' + x.toFixed(1) + ' ' + (y - 5).toFixed(1) + 'V' + (y + 5).toFixed(1);
+    return d;
+  }
+
+  function render() {
+    // äußeres Feld
+    for (var i = 0; i < outerArrows.length; i++) outerArrows[i].setAttribute('opacity', f.toFixed(2));
+    // Gegenfeld: Pfeillänge wächst mit s
+    var len = 192 * s;
+    counterArrows.forEach(function (a) {
+      if (len < 14) { a.setAttribute('visibility', 'hidden'); return; }
+      a.setAttribute('x2', (448 - len).toFixed(1));
+      a.setAttribute('visibility', 'visible');
+    });
+    // Ladungen
+    glyphs.forEach(function (g) {
+      var p = g.loop.at(g.u0 + g.d * s);
+      g.el.setAttribute('d', glyphPath(p[0], p[1], g.sign));
+    });
+    // Vektoraddition (Spitze an Fuß): äußeres Feld nach rechts, Gegenfeld nach links
+    var a = f * LEN, b = s * LEN;
+    setArrow(pOuter, 62, X0, X0 + a);
+    setArrow(pCounter, 102, X0 + a, X0 + a - b);
+    setArrow(pSum, 142, X0, X0 + a - b);
+    var zero = on && Math.abs(f - s) < 0.02;
+    zeroText.setAttribute('visibility', zero ? 'visible' : 'hidden');
+    zeroText.setAttribute('x', X0 + 14);
+
+    var st;
+    if (!on && s < 0.02) st = 'off0';
+    else if (!on) st = 'back';
+    else if (Math.abs(f - s) < 0.03) st = 'done';
+    else if (s < 0.12) st = 'start';
+    else st = 'move';
+    if (st !== lastState) { document.getElementById('state').textContent = STATES[st]; lastState = st; }
+  }
+
+  function step(dt) {
+    if (paused) return;
+    f += ((on ? 1 : 0) - f) * (1 - Math.exp(-dt / 0.12));
+    s += (f - s) * (1 - Math.exp(-dt / TAU));
+    if (on && f > 0.999) f = 1;
+    if (Math.abs(f - s) < 0.003 && f > 0.99) s = f;
+    if (!on && f < 0.001) f = 0;
+    if (!on && s < 0.003) s = 0;
+  }
+
+  /* ---------- Bedienung ---------- */
+  var toggleBtn = document.getElementById('toggle');
+  var pauseBtn = document.getElementById('pause');
+  toggleBtn.addEventListener('click', function () {
+    on = !on;
+    toggleBtn.textContent = on ? 'Feld ausschalten' : 'Feld einschalten';
+    if (paused) { paused = false; pauseBtn.textContent = 'Pause'; }
+  });
+  pauseBtn.addEventListener('click', function () {
+    paused = !paused;
+    pauseBtn.textContent = paused ? 'Weiter' : 'Pause';
+  });
+  document.getElementById('reset').addEventListener('click', function () {
+    on = false; paused = false; f = 0; s = 0;
+    toggleBtn.textContent = 'Feld einschalten';
+    pauseBtn.textContent = 'Pause';
+    lastState = '';
+  });
+
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    step(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+  render();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
